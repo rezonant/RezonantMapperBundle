@@ -1,0 +1,11 @@
+{
+    "name": "rezonant/MapperBundle",
+    "description": "Provides an object-mapping framework",
+    "authors": [
+        {
+            "name": "William Lahti",
+            "email": "wilahti@gmail.com"
+        }
+    ],
+    "require": {}
+}
