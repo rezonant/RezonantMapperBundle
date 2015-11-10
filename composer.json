@@ -3,7 +3,7 @@
 	"type": "symfony-bundle",
     "description": "Provides an object-mapping framework",
 	"keywords": ["mapping", "models"],
-	"homepage": "http://github.com/rezonant/mapping-bundle",
+	"homepage": "http://github.com/rezonant/mapper-bundle",
 	"license": "MIT",
     "authors": [
         {
@@ -12,7 +12,7 @@
         }
     ],
 	"support": {
-		"issues": "https://github.com/rezonant/mapping-bundle/issues"
+		"issues": "https://github.com/rezonant/mapper-bundle/issues"
 	},
 
 	"require": {
