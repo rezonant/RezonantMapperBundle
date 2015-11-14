@@ -3,9 +3,11 @@
 namespace Rezonant\MapperBundle;
 
 use Doctrine\Common\Annotations\AnnotationReader;
+use Rezonant\MapperBundle\Exceptions\InvalidTypeException;
+use Rezonant\MapperBundle\Exceptions\FabricationFailedException;
 
 /**
- * 
+ * Maps between two objects
  */
 class Mapper {
 	
@@ -36,73 +38,28 @@ class Mapper {
 			return false;
 		
 		$prop = $class->getProperty($fieldName);
-
-		$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
-				$prop, 'Rezonant\\MapperBundle\\Annotations\\Type');
-		
-		if (!$typeAnnotation)
-			return false;
-		
-		return $typeAnnotation->value;
+		return $this->getTypeFromProperty($prop);
 	}
 	
 	/**
 	 * Maps the source object data into the destination object, using the given map.
 	 */
-	public function mapExplicitly($source, $destination, Map $map) {
+	private function mapExplicitly($source, $destination, Map $map) {
 		
 		foreach ($map->getFields() as $field) {
 			$name = $field->getName();
 			$destinationField = $this->parsePath($field->getDestinationField());
-			$submap = $field->getSubmap();
 			$value = $this->get($source, $name);
 			
-			list($realDestination, $realField) = $this->prepareForSet($destination, $destinationField);
-			
-			/**
-			 * Make sure we have enough information to create the destination object
-			 */
-			
-			$sourceType = "<unknown>";
-			if (is_object($value))
-				$sourceType = get_class($value);
-			else if (is_array($value))
-				$sourceType = "<array>";
-			else if (is_int($value))
-				$sourceType = "<int>";
-			else if (is_bool ($value))
-				$sourceType = "<bool>";
-			else if (is_string ($value))
-				$sourceType = "<string>";
-			
-			$destinationType = $this->getType($realDestination, $realField->field);
-			$allowMapping = (is_object($value) || is_array($value)) && $destinationType !== false;
-			
-			/**
-			 * If the value we received from the source does not match the type annotation of the destination,
-			 * we will attempt to map it somehow.
-			 */
-			if ($allowMapping && $sourceType != $destinationType) {
-				$subdestination = $this->get($realDestination, $realField);
-				
-				if (!$subdestination)
-					$subdestination = $this->fabricateInstance($realDestination, $realField->field);
-
-				if (!$submap)
-					$submap = $this->generateMap($value, $subdestination);
-
-				$this->mapExplicitly($value, $subdestination, $submap);
-				$value = $subdestination;
-			}
-			
-			$this->set($realDestination, $realField, $value);
+			$destination = $this->deepSet($destination, $destinationField, $value, 
+					$field->getDestinationType(), $field->getSubmap());
 		}
 		
 		return $destination;
 		
 	}
 	
-	public function map($source, $destination)
+	public function map($source, $destination, $map = NULL)
 	{
 		if (is_string($source))
 			$source = new $source;
@@ -112,7 +69,7 @@ class Mapper {
 		
 		return $this->mapExplicitly(
 				$source, $destination, 
-				$this->generateMap($source, $destination)
+				$map? $map : $this->generateMap($source, $destination)
 		);
 	}
 	
@@ -123,7 +80,6 @@ class Mapper {
 	
 	private function generateMap($source, $destination)
 	{
-		
 		// [x] Use case 1: Source is array/stdclass, destination is model
 		// [x] Use case 2: Source is model which knows about entity, destination is entity with no knowledge of model
 		// [x] Use case 3: Source/dest are both array/stdclass. Direct mapping only.
@@ -143,55 +99,128 @@ class Mapper {
 		
 		// ie: Request -> Model
 		if ($this->isStandard($source)) {
-			return $this->mapToModel($source, $destination);
+			return $this->mapToModel($destination);
 		}
 		
 		// ie: Model -> Entity
-		$map = $this->mapFromModel($source, $destination);
-		
-		return $map;
+		return $this->mapFromModel($source, $destination);
 	}
 	
 	/**
 	 * Map using the @MapTo() annotations found in the object
-	 * @param object $model
-	 * @param object $entity
+	 * @param object $modelOrClass A class or object to map from
+	 * @param object $entityOrClass A class or object to map to
 	 */
-	public function mapFromModel($model, $entity) {
-		$class = new \ReflectionClass($model);
+	public function mapFromModel($modelOrClass, $entityOrClass) {
+		$class = new \ReflectionClass($modelOrClass);
 		$annotationName = 'Rezonant\\MapperBundle\\Annotations\\MapTo';
 		$map = new MapBuilder();
-		$destinationClass = new \ReflectionClass($entity);
+		$destinationClass = new \ReflectionClass($entityOrClass);
 		
 		foreach ($class->getProperties() as $property) {
 			$annotation = $this->annotationReader->getPropertyAnnotation($property, $annotationName);
 			
-			if ($annotation) {
-				$map->field($property->name, $annotation->value);
-				continue;
+			// Resolve the type of this property for submapping later.
+			
+			$subSourceType = $this->getTypeFromProperty($property);
+			$subDestType = null;
+			$fieldValue = null;
+			$submap = null;
+			$destinationField = null;
+			
+			// Use the annoted destination field, or assume that the mapping
+			// is 1-to-1.
+			
+			if ($annotation)
+				$destinationField = $annotation->value;
+			else if ($destinationClass->hasProperty($property->name))
+				$destinationField = $property->name;
+			
+			// Resolve the destination field's type for generating a submap.
+			
+			if ($destinationField) {
+				$subDeepProperty = $this->getDeepProperty($destinationClass, $destinationField);
+				$subDestType = $this->getTypeFromProperty($subDeepProperty);
 			}
 			
-			if ($destinationClass->hasProperty($property->name)) {
-				$map->field($property->name, $property->name);
-				continue;
-			}
+			if ($subSourceType && $subDestType)
+				$submap = $this->mapFromModel ($subSourceType, $subDestType);
+			
+			if ($destinationField)
+				$map->field($property->name, $destinationField, $subDestType, $submap);
 		}
 		
 		return $map->build();
 	}
 	
 	/**
+	 * Get a ReflectionProperty deeply.
+	 * 
+	 * @param \ReflectionClass $class
+	 * @param string $dottedReference The given dotted reference
+	 * @return mixed Usually a \ReflectionProperty. If the dotted reference falls into
+	 *					an associative array property, we will return "<array>"
+	 */
+	private function getDeepProperty(\ReflectionClass $class, $dottedReference)
+	{
+		$originalClass = $class;
+		$fields = $this->parsePath($dottedReference);
+		$fieldCount = count($fields);
+		$property = null;
+		$className = $originalClass->getName();
+		
+		foreach ($fields as $i => $field) {
+		
+			$isPrimitive = $this->isPrimitiveType($className);
+			
+			// Cannot traverse into primitive types (it is impossible for this
+			// to happen on first iteration)
+			
+			if ($isPrimitive) {
+				throw new \InvalidArgumentException(
+						"Cannot traverse into primitive type $className "
+						. "to satisfy reference '{$field->field}' "
+						. "of full reference '$dottedReference'"
+				);
+			}
+			
+			$currentClass = new \ReflectionClass($className);
+			$property = $currentClass->getProperty($field->field);
+			
+			// We're done? We'll return $property at the end.
+			
+			if ($i + 1 >= $fieldCount)
+				break;
+			
+			$className = $this->getTypeFromProperty($property);
+			if (!$className)
+				throw new \InvalidArgumentException(
+					"Failed to reflect on field reference '$dottedReference' of class {$originalClass->getName()}");
+			
+			if ($className == '<array>') {
+				// Oh, this isn't so bad..
+				return "<array>";
+			}
+			
+		}
+		
+		return $property;
+	}
+	
+	private function isPrimitiveType($type)
+	{
+		return preg_match('#^<.*>$#', $type);
+	}
+	
+	/**
 	 * Create a map for an array/stdclass to an object providing @FromRequest annotations
 	 * 
-	 * @param object $source A dumb (stdclass/array) source object
+	 * @param string $source The root path string of an anonymous object which will source this mapping.
 	 * @param object $destination An object with a class providing some @FromRequest annotations (or not whatever)
 	 */
-	public function mapToModel($source, $destination) {
+	public function mapToModel($destinationOrClass) {
 		
-		if (is_array($source))
-			$source = (object)$source;
-		
-		$type = new \ReflectionClass($destination);
+		$type = new \ReflectionClass($destinationOrClass);
 		$map = new MapBuilder();
 		
 		foreach ($type->getProperties() as $property) {
@@ -205,10 +234,45 @@ class Mapper {
 			if (!$name)
 				$name = $property->name;
 			
-			$map->field($name, $property->name);
+			$subtype = $this->getTypeFromProperty($property);
+			$submap = null;
+			
+			if ($subtype) {
+				$submap = $this->mapToModel($subtype);
+			}
+			
+			$map->field($name, $property->name, $subtype, $submap);
 		}
 		
 		return $map->build();
+	}
+	
+	/**
+	 * Get the designated class name from the given property
+	 * 
+	 * @param mixed $property Can be either a \ReflectionProperty or a primitive string type.
+	 * @return string If $property was a primitive string type (ie <array>) then that string is returned.
+	 *					If $property is a \ReflectionProperty, the type of that property is returned, or null if
+	 *					one could not be determined.
+	 */
+	private function getTypeFromProperty($property)
+	{
+		if ($this->isPrimitiveType($property))
+			return $property;
+		
+		if (is_string($property)) {
+			throw new \InvalidArgumentException(
+					'Parameter $property cannot be a string unless the string is a valid primitive type'
+			);
+		}
+		
+		$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
+				$property, 'Rezonant\\MapperBundle\\Annotations\\Type');
+		
+		if (!$typeAnnotation)
+			return null;
+		
+		return $typeAnnotation->value;
 	}
 	
 	/**
@@ -221,6 +285,9 @@ class Mapper {
 	 */
 	private function parsePath($path)
 	{
+		if (!is_string($path))
+			throw new \InvalidArgumentException('Parameter $path must be a string');
+		
 		$split = explode('.', $path);
 		$retPath = array();
 		
@@ -249,70 +316,136 @@ class Mapper {
 	 * @param object $destination
 	 * @param string $fieldName
 	 */
-	private function fabricateInstance($destination, $fieldName)
+	private function fabricateInstance($destination, $fieldName, $destinationType = null)
 	{
-		
-		$class = new \ReflectionClass($destination);
-		$prop = $class->getProperty($fieldName);
+		if (!$destinationType) {
+			$class = new \ReflectionClass($destination);
+			$prop = $class->getProperty($fieldName);
 
-		$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
-				$prop, 'Rezonant\\MapperBundle\\Annotations\\Type');
-		
-		if (!$typeAnnotation) {
-			throw new \Exception(
-				"Cannot fabricate instance for field "
-				. get_class($destination)."::\$$fieldName: "   
-				. "No @Mapper\Type annotation present."
-			);
+			$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
+					$prop, 'Rezonant\\MapperBundle\\Annotations\\Type');
+
+			if (!$typeAnnotation) {
+				throw new FabricationFailedException(
+					"Cannot fabricate instance for field "
+					. get_class($destination)."::\$$fieldName: "   
+					. "No @Mapper\Type annotation present."
+				);
+			}
+
+			$destinationType = $typeAnnotation->value;
 		}
 		
-		$type = $typeAnnotation->value;
+		if ($destinationType == '<array>')
+			return array();
 		
-		if (!class_exists($type, true)) {
-			throw new \Exception("Type '$type' is not a class");
-		}
+		if (!class_exists($destinationType, true))
+			throw new InvalidTypeException($destinationType);
 		
-		$instance = new $type();
+		$instance = new $destinationType();
 		
 		return $instance;
+	}
+	
+	private function arrayBackSet($visited, $path, $array)
+	{
+		if (empty($visited))
+			return;
+		
+		$lastVisited = array_pop($visited);
+		$lastPath = array_pop($path);
+		
+		$this->set($lastVisited, $lastPath, $array);
+		
+		if (is_array($lastVisited))
+			return arrayBackSet($visited, $path, $lastVisited);
 	}
 	
 	/**
 	 * Constructs any objects necessary along the given object path,
 	 * starting from $destination.
 	 * 
+	 * @param mixed $destination An object or an array. This parameter is pass by reference in the case of arrays
+	 * @param array $path An array of path items
+	 * @param Map $map The map
+	 * @return type
+	 * @throws \Exception
 	 */
-	private function prepareForSet($destination, $path, $visited = array(), $originalPath = null)
+	private function deepSet(&$destination, $path, $value, $destinationClass = NULL, $map = NULL)
 	{
-		if (!$originalPath)
-			$originalPath = $path;
+		$originalDestination = $destination;
+		$current = $originalDestination;
+		$pathCount = count($path);
+		$currentMap = $map;
+		$visited = array();
+		$visitedPath = array();
 		
-		if (count($path) == 1)
-			return array($destination, $path[0], $originalPath);
+		$vd = function($v) {
+			ob_start();
+			var_dump($v);
+			return ob_get_clean();
+		};
 		
-		$field = $path[0];
-		$fieldName = $field->field;
-		
-		$type = new \ReflectionClass($destination);
-		$fieldValue = $this->get($destination, $field);
-		if (!$fieldValue) {
-			// This needs to be an object! Make it so!
-			$fieldValue = $this->fabricateInstance($destination, $field->field);			
-			$this->set($destination, $field, $fieldValue);
+		foreach ($path as $i => $field) {
+			
+			if (!is_object($current) && !is_array($current)) {
+				throw new \InvalidArgumentException("Cannot traverse into non-object: ".$vd($current));
+			}
+			
+			// Are we ready to set?
+			if ($i + 1 >= $pathCount) {
+				// OK we need to set!
+				
+				if ($destinationClass && $map) {	
+					$nextDestination = new $destinationClass();
+					$this->mapExplicitly($value, $nextDestination, $currentMap);
+					$this->set($current, $field, $nextDestination);
+				} else {
+					$this->set($current, $field, $value);
+				}
+				
+				if (is_array($current)) {
+					$this->arrayBackSet($visited, $visitedPath, $current);
+				}
+				
+				break;
+			}
+			
+			$mapField = null;
+			if ($currentMap) {
+				$mapField = $currentMap->getField($field->field);
+			}
+			
+			$visited[] = $current;
+			$visitedPath[] = $field;	
+			
+			if (!$this->get($current, $field)) {
+				// This needs to be an object! Make it so!
+				$fieldValue = &$this->fabricateInstance($current, $field->field, 
+						$mapField? $mapField->getDestinationType() : null);
+				
+				$this->set($current, $field, $fieldValue);
+				
+				//$fieldValue = &$this->get($current, $field);
+				$current = &$fieldValue;
+			} else {
+				$current = &$this->get($current, $field);
+			}
+			
+			if ($currentMap && $mapField) {
+				$currentMap = $mapField->getSubmap();
+			} else {
+				$currentMap = null;
+				$mapField = null;
+			}
 		}
 		
-		$subset = $path;
-		array_shift($subset);
+		if (count($visited) == 0)
+			return $current;
+		else
+			return $visited[0];
 		
-		try {
-			return $this->prepareForSet($fieldValue, $subset, $visited);
-		} catch (\Exception $e) {
-			
-			if (count($visited) > 0)
-				throw $e;
-			
-			throw new \Exception("Failed to prepare objects before setting $path: ".$e->getMessage());
-		}
+		//return $originalDestination;
 	}
 	
 	/**
@@ -322,14 +455,30 @@ class Mapper {
 	 * @param string $fieldName
 	 * @param mixed $value
 	 */
-	private function set($instance, $field, $value)
+	private function set(&$instance, $field, &$value)
 	{
+		if (!is_object($instance) && !is_array($instance))
+			throw new \InvalidArgumentException("Instance must be an object or array");
+		
 		if (is_string($field))
 			$field = (object)array('field' => $field);
+		
+		if (is_array($instance)) {
+			$instance[$field->field] = &$value;
+			return;
+		}
+		
+		if ($instance instanceof \stdclass) {
+			$instance->{$field->field} = &$value;
+			return;
+		}
 		
 		$methodName = "set{$field->field}";
 		
 		if (method_exists($instance, $methodName)) {
+			
+			//var_dump($instance);
+			//var_dump($methodName);
 			$instance->$methodName($value);
 		} else {
 			$property = new \ReflectionProperty(get_class($instance), $field->field);
@@ -342,48 +491,58 @@ class Mapper {
 	 * Gets the value of the property named $field on $instance.
 	 * 
 	 * @param object $instance
-	 * @param string $field
+	 * @param mixed $field A string path (see parsePath()), an array of path field reference objects,
+	 *						or a single field reference object. 
 	 * @return mixed
 	 * @throws \Exception Thrown if no such field/property exists
 	 */
-	private function get($instance, $field)
+	private function get(&$instance, $field)
 	{	
-		if (is_string($field)) {
-			$field = (object)array('type' => is_array($instance)? 'array' : 'object', 'field' => $field);
-		}
+		if (is_string($field))
+			$field = $this->parsePath($field);
 		
-		$path = $this->parsePath($field->field);
-		$fieldName = $field->field;
-		
-		if (count($path) > 1) {
-			
-			$lastItem = array_pop($path);
-			$contextObject = $instance;
-			foreach ($path as $item) {
-				if (is_array($contextObject))
-					$contextObject = $contextObject[$item->field];
-				else
-					$contextObject = $this->get($contextObject, $item);
-			}
-			
-			$instance = $contextObject;
-			$fieldName = $lastItem->field;
-		}
-		
-		if (is_array($instance))
-			return $instance[$fieldName];
-		
-		//if ($field->type == 'array')
-		//	throw new \Exception("Field type should be array for array source object, not {$field->type}");
-		
-	
-		$methodName = "get$fieldName";
-		
-		if (method_exists($instance, $methodName))
-			return $instance->$methodName();
-		else if (property_exists ($instance, $fieldName))
-			return $instance->$fieldName;
+		if (is_array($field))
+			$path = $field;
 		else
-			throw new \Exception("No such property $fieldName on object of class ".get_class($instance));
+			$path = array($field);
+		
+		// Walk the path to the penultimate object.
+		
+		$contextObject = &$instance;
+		foreach ($path as $i => $item) {
+			if ($i == 0)
+				continue;
+			$contextObject = &$this->get($contextObject, $item);
+		}
+		
+		$fieldName = $path[count($path)-1]->field;
+		
+		// Arrays...
+		
+		if (is_array($contextObject)) {
+			if (!isset($contextObject[$fieldName]))
+				return null;
+			
+			return $contextObject[$fieldName];
+		}
+		
+		// Doesn't exist _yet_!
+		
+		if (is_null($contextObject))
+			return null;
+		
+		// Various ways of retrieving an object field...
+		
+		if (is_object($contextObject)) {
+			$methodName = "get$fieldName";
+			if (method_exists($contextObject, $methodName))
+				return $contextObject->$methodName();
+			else if (property_exists ($contextObject, $fieldName))
+				return $contextObject->$fieldName;
+			else
+				throw new \InvalidArgumentException("No such property $fieldName on object of class ".get_class($contextObject));
+		}
+		
+		throw new \InvalidArgumentException("Cannot set field $fieldName on a non-object:\nPath trace: ".print_r($path, true)."\nObject trace: ".print_r($contextObject, true));
 	}
 }

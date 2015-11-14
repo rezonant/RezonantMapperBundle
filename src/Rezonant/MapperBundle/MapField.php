@@ -11,7 +11,16 @@ class MapField {
 	
 	private $name;
 	private $destinationField;
+	private $destinationType;
 	private $submap;
+	
+	function getDestinationType() {
+		return $this->destinationType;
+	}
+
+	function setDestinationType($destinationType) {
+		$this->destinationType = $destinationType;
+	}
 	
 	function getSubmap() {
 		return $this->submap;

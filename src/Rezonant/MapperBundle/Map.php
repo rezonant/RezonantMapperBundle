@@ -19,4 +19,13 @@ class Map {
 	function setFields($fields) {
 		$this->fields = $fields;
 	}
+	
+	public function getField($fieldName) {
+		foreach ($this->fields as $field) {
+			if ($field->field == $fieldName)
+				return $field;
+		}
+		
+		return null;
+	}
 }
