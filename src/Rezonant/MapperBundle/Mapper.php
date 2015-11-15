@@ -5,9 +5,8 @@ namespace Rezonant\MapperBundle;
 use Rezonant\MapperBundle\Exceptions\InvalidTypeException;
 use Rezonant\MapperBundle\Exceptions\FabricationFailedException;
 use Rezonant\MapperBundle\Utilities\PathParser;
-use Rezonant\MapperBundle\Providers\MapProvider;
 use Rezonant\MapperBundle\Exceptions\UnableToMapException;
-
+use Rezonant\MapperBundle\Providers\MapProviderInterface;
 /**
  * Maps between two objects
  */
@@ -16,13 +15,13 @@ class Mapper {
 	/**
 	 * Construct a new instance of Mapper
 	 */
-	public function __construct(MapProvider $provider) {
+	public function __construct(MapProviderInterface $provider) {
 		$this->mapProvider = $provider;
 		$this->pathParser = new PathParser();
 	}
 	
 	/**
-	 * @var MapProvider
+	 * @var MapProviderInterface
 	 */
 	private $mapProvider;
 	

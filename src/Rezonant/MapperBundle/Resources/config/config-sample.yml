@@ -1,0 +1,29 @@
+
+rezonant_mapper:
+    providers: 
+        annotations: 
+            enabled: true
+        config:
+            enabled: true
+        custom:
+            - class: \ABC\MyMapProvider
+              arguments: ['%myService']
+          
+    caching: 
+        enabled: true
+        strategy: \ABC\MyCacheStrategy
+    
+    maps:
+        - source: \ABC\MyModel
+          destination: \ABC\MyEntity
+          fields: 
+              - from: foo
+                to:   bar
+                type: \ABC\MyEntitySubclass
+                map: 
+                    fields:
+                        - from: foo
+                          to: bar
+              - from: foo
+                to:   baz.boo
+                types: [\MyEntitySubclass, '<int>']

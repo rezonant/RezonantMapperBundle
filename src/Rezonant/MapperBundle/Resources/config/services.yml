@@ -1,0 +1,11 @@
+
+services:
+    rezonant.mapper:
+        class: \Rezonant\MapperBundle\Mapper
+        arguments: ['@rezonant.mapper.map_provider']
+        
+    rezonant.mapper.map_provider:
+        alias: rezonant.mapper.annotation_map_provider
+    rezonant.mapper.annotation_map_provider:
+        class: \Rezonant\MapperBundle\Providers\AnnotationMapProvider
+        arguments: ['@annotation_reader']
