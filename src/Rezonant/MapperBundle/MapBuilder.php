@@ -11,7 +11,7 @@ class MapBuilder {
 	 * @param Map $map
 	 * @return MapBuilder
 	 */
-	public function field($sourceFieldName, $destinationFieldName, $destinationType = NULL, Map $map = NULL)
+	public function field($sourceFieldName, $destinationFieldName, $destinationTypes = NULL, Map $map = NULL)
 	{
 		if (is_null($sourceFieldName))
 			throw new \InvalidArgumentException('$sourceFieldName cannot be null');
@@ -21,7 +21,7 @@ class MapBuilder {
 		
 		$mapField = new MapField($sourceFieldName);
 		$mapField->setDestinationField($destinationFieldName);
-		$mapField->setDestinationType($destinationType);
+		$mapField->setDestinationTypes($destinationTypes);
 		$mapField->setSubmap($map);
 		$this->fields[] = $mapField;
 		

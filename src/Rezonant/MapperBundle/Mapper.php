@@ -52,7 +52,7 @@ class Mapper {
 			$value = $this->get($source, $name);
 			
 			$destination = $this->deepSet($destination, $destinationField, $value, 
-					$field->getDestinationType(), $field->getSubmap());
+					$field->getDestinationTypes(), $field->getSubmap());
 		}
 		
 		return $destination;
@@ -80,13 +80,6 @@ class Mapper {
 	
 	private function generateMap($source, $destination)
 	{
-		// [x] Use case 1: Source is array/stdclass, destination is model
-		// [x] Use case 2: Source is model which knows about entity, destination is entity with no knowledge of model
-		// [x] Use case 3: Source/dest are both array/stdclass. Direct mapping only.
-		
-		// Property on source class can have @Mapper\MapTo("fieldName") annotations to map into destination field
-		// Property on source class can have @Mapper\Type("Type") to allow Mapper to automatically create instances
-		
 		// Standard classes/arrays
 		if ($this->isStandard($source) && $this->isStandard($destination)) {
 			$map = new MapBuilder();
@@ -139,15 +132,21 @@ class Mapper {
 			// Resolve the destination field's type for generating a submap.
 			
 			if ($destinationField) {
-				$subDeepProperty = $this->getDeepProperty($destinationClass, $destinationField);
-				$subDestType = $this->getTypeFromProperty($subDeepProperty);
+				$subDeepProperties = $this->getDeepProperty($destinationClass, $destinationField);
+				$self = $this;
+				$subDestTypes = array_map(
+					function($prop) use ($self) { 
+						return $self->getTypeFromProperty($prop);
+					}, $subDeepProperties);
+				
+				$subDestType = $subDestTypes[count($subDestTypes) - 1];
 			}
 			
 			if ($subSourceType && $subDestType)
 				$submap = $this->mapFromModel ($subSourceType, $subDestType);
 			
 			if ($destinationField)
-				$map->field($property->name, $destinationField, $subDestType, $submap);
+				$map->field($property->name, $destinationField, $subDestTypes, $submap);
 		}
 		
 		return $map->build();
@@ -168,9 +167,15 @@ class Mapper {
 		$fieldCount = count($fields);
 		$property = null;
 		$className = $originalClass->getName();
+		$properties = array();
 		
 		foreach ($fields as $i => $field) {
 		
+			if ($className == '<array>') {
+				$properties[] = '<array>';
+				continue;
+			}
+			
 			$isPrimitive = $this->isPrimitiveType($className);
 			
 			// Cannot traverse into primitive types (it is impossible for this
@@ -186,6 +191,7 @@ class Mapper {
 			
 			$currentClass = new \ReflectionClass($className);
 			$property = $currentClass->getProperty($field->field);
+			$properties[] = $property;
 			
 			// We're done? We'll return $property at the end.
 			
@@ -197,14 +203,9 @@ class Mapper {
 				throw new \InvalidArgumentException(
 					"Failed to reflect on field reference '$dottedReference' of class {$originalClass->getName()}");
 			
-			if ($className == '<array>') {
-				// Oh, this isn't so bad..
-				return "<array>";
-			}
-			
 		}
 		
-		return $property;
+		return $properties;
 	}
 	
 	private function isPrimitiveType($type)
@@ -241,7 +242,7 @@ class Mapper {
 				$submap = $this->mapToModel($subtype);
 			}
 			
-			$map->field($name, $property->name, $subtype, $submap);
+			$map->field($name, $property->name, array($subtype), $submap);
 		}
 		
 		return $map->build();
@@ -319,6 +320,7 @@ class Mapper {
 	private function fabricateInstance($destination, $fieldName, $destinationType = null)
 	{
 		if (!$destinationType) {
+			throw new \Exception("Obsolete");
 			$class = new \ReflectionClass($destination);
 			$prop = $class->getProperty($fieldName);
 
@@ -371,7 +373,7 @@ class Mapper {
 	 * @return type
 	 * @throws \Exception
 	 */
-	private function deepSet(&$destination, $path, $value, $destinationClass = NULL, $map = NULL)
+	private function deepSet(&$destination, $path, $value, $destinationClasses = NULL, $map = NULL)
 	{
 		$originalDestination = $destination;
 		$current = $originalDestination;
@@ -391,6 +393,10 @@ class Mapper {
 			if (!is_object($current) && !is_array($current)) {
 				throw new \InvalidArgumentException("Cannot traverse into non-object: ".$vd($current));
 			}
+			
+			$destinationClass = null;
+			if (isset($destinationClasses[$i]))
+				$destinationClass = $destinationClasses[$i];
 			
 			// Are we ready to set?
 			if ($i + 1 >= $pathCount) {
@@ -421,8 +427,9 @@ class Mapper {
 			
 			if (!$this->get($current, $field)) {
 				// This needs to be an object! Make it so!
+				
 				$fieldValue = &$this->fabricateInstance($current, $field->field, 
-						$mapField? $mapField->getDestinationType() : null);
+						$mapField? $mapField->getDestinationType() : $destinationClass);
 				
 				$this->set($current, $field, $fieldValue);
 				
