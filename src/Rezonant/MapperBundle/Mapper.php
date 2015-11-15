@@ -2,9 +2,11 @@
 
 namespace Rezonant\MapperBundle;
 
-use Doctrine\Common\Annotations\AnnotationReader;
 use Rezonant\MapperBundle\Exceptions\InvalidTypeException;
 use Rezonant\MapperBundle\Exceptions\FabricationFailedException;
+use Rezonant\MapperBundle\Utilities\PathParser;
+use Rezonant\MapperBundle\Providers\MapProvider;
+use Rezonant\MapperBundle\Exceptions\UnableToMapException;
 
 /**
  * Maps between two objects
@@ -13,52 +15,44 @@ class Mapper {
 	
 	/**
 	 * Construct a new instance of Mapper
-	 * @param AnnotationReader $reader
 	 */
-	public function __construct(AnnotationReader $reader) {
-		$this->annotationReader = $reader;
+	public function __construct(MapProvider $provider) {
+		$this->mapProvider = $provider;
+		$this->pathParser = new PathParser();
 	}
 	
 	/**
-	 * @var AnnotationReader
+	 * @var MapProvider
 	 */
-	private $annotationReader;
+	private $mapProvider;
 	
 	/**
-	 * Return class name string if there is type information available for the given object/field
+	 * @var PathParser
+	 */
+	private $pathParser;
+	
+	/**
+	 * Map from the given source to the given destination. This is the primary method of this
+	 * service, and is used to kick off all mapping operations. The final result of the mapping
+	 * operation is returned for cases where the destination is created while mapping or the destination
+	 * is a pass-by-value type like an array, etc. Note that if you pass in an object as the destination,
+	 * you do not need to take the return value as they will be identical.
 	 * 
-	 * @param type $object
-	 * @param type $fieldName
+	 * @param mixed $source An object or array to map from.
+	 * @param mixed $destination May be an existing object, an array, 
+	 *							 or a string class name (in which case the object will be
+	 *							 created for you and returned).
+	 * @param Map $map A map which specifies how to translate between the source and destination.
+	 *					If none is provided, the MapProvider specified during construction of this
+	 *					Mapper object shall be used to attempt to produce a working map between the 
+	 *					two objects. MapProviders can do this in many ways- by consulting caches,
+	 *					reading annotations, reading mapping configuration files, etc.
+	 * @return mixed The fully mapped $destination. 
+	 *				 You must use this value if the destination is an array.
+	 *				 
+	 * @throws UnableToMapException Thrown if no map is provided and the configured MapProvider
+	 *								is unable to produce a valid map to direct the mapping process.
 	 */
-	private function getType($object, $fieldName)
-	{
-		$class = new \ReflectionClass($object);
-		
-		if (!$class->hasProperty($fieldName))
-			return false;
-		
-		$prop = $class->getProperty($fieldName);
-		return $this->getTypeFromProperty($prop);
-	}
-	
-	/**
-	 * Maps the source object data into the destination object, using the given map.
-	 */
-	private function mapExplicitly($source, $destination, Map $map) {
-		
-		foreach ($map->getFields() as $field) {
-			$name = $field->getName();
-			$destinationField = $this->parsePath($field->getDestinationField());
-			$value = $this->get($source, $name);
-			
-			$destination = $this->deepSet($destination, $destinationField, $value, 
-					$field->getDestinationTypes(), $field->getSubmap());
-		}
-		
-		return $destination;
-		
-	}
-	
 	public function map($source, $destination, $map = NULL)
 	{
 		if (is_string($source))
@@ -67,247 +61,24 @@ class Mapper {
 		if (is_string($destination))
 			$destination = new $destination;
 		
-		return $this->mapExplicitly(
-				$source, $destination, 
-				$map? $map : $this->generateMap($source, $destination)
-		);
-	}
-	
-	private function isStandard($object)
-	{
-		return is_array($object) || (is_object($object) && get_class($object) == 'stdclass');
-	}
-	
-	private function generateMap($source, $destination)
-	{
-		// Standard classes/arrays
-		if ($this->isStandard($source) && $this->isStandard($destination)) {
-			$map = new MapBuilder();
-			foreach ($source as $k => $v) {
-				$map->field($k, $k);
-			}
-			
-			return $map->build();
+		// If the user did not provide an explicit map, get one from the mapping provider.
+		
+		if (!$map) {
+			$map = $this->mapProvider->getMap($source, $destination);
+			if (!$map)
+				throw new UnableToMapException($this->mapProvider, $source, $destination);
 		}
 		
-		// ie: Request -> Model
-		if ($this->isStandard($source)) {
-			return $this->mapToModel($destination);
+		foreach ($map->getFields() as $field) {
+			$name = $field->getName();
+			$destinationField = $this->pathParser->parse($field->getDestinationField());
+			$value = $this->get($source, $name);
+			
+			$destination = $this->deepSet($destination, $destinationField, $value, 
+					$field->getDestinationTypes(), $field->getSubmap());
 		}
 		
-		// ie: Model -> Entity
-		return $this->mapFromModel($source, $destination);
-	}
-	
-	/**
-	 * Map using the @MapTo() annotations found in the object
-	 * @param object $modelOrClass A class or object to map from
-	 * @param object $entityOrClass A class or object to map to
-	 */
-	public function mapFromModel($modelOrClass, $entityOrClass) {
-		$class = new \ReflectionClass($modelOrClass);
-		$annotationName = 'Rezonant\\MapperBundle\\Annotations\\MapTo';
-		$map = new MapBuilder();
-		$destinationClass = new \ReflectionClass($entityOrClass);
-		
-		foreach ($class->getProperties() as $property) {
-			$annotation = $this->annotationReader->getPropertyAnnotation($property, $annotationName);
-			
-			// Resolve the type of this property for submapping later.
-			
-			$subSourceType = $this->getTypeFromProperty($property);
-			$subDestType = null;
-			$fieldValue = null;
-			$submap = null;
-			$destinationField = null;
-			
-			// Use the annoted destination field, or assume that the mapping
-			// is 1-to-1.
-			
-			if ($annotation)
-				$destinationField = $annotation->value;
-			else if ($destinationClass->hasProperty($property->name))
-				$destinationField = $property->name;
-			
-			// Resolve the destination field's type for generating a submap.
-			
-			if ($destinationField) {
-				$subDeepProperties = $this->getDeepProperty($destinationClass, $destinationField);
-				$self = $this;
-				$subDestTypes = array_map(
-					function($prop) use ($self) { 
-						return $self->getTypeFromProperty($prop);
-					}, $subDeepProperties);
-				
-				$subDestType = $subDestTypes[count($subDestTypes) - 1];
-			}
-			
-			if ($subSourceType && $subDestType)
-				$submap = $this->mapFromModel ($subSourceType, $subDestType);
-			
-			if ($destinationField)
-				$map->field($property->name, $destinationField, $subDestTypes, $submap);
-		}
-		
-		return $map->build();
-	}
-	
-	/**
-	 * Get a ReflectionProperty deeply.
-	 * 
-	 * @param \ReflectionClass $class
-	 * @param string $dottedReference The given dotted reference
-	 * @return mixed Usually a \ReflectionProperty. If the dotted reference falls into
-	 *					an associative array property, we will return "<array>"
-	 */
-	private function getDeepProperty(\ReflectionClass $class, $dottedReference)
-	{
-		$originalClass = $class;
-		$fields = $this->parsePath($dottedReference);
-		$fieldCount = count($fields);
-		$property = null;
-		$className = $originalClass->getName();
-		$properties = array();
-		
-		foreach ($fields as $i => $field) {
-		
-			if ($className == '<array>') {
-				$properties[] = '<array>';
-				continue;
-			}
-			
-			$isPrimitive = $this->isPrimitiveType($className);
-			
-			// Cannot traverse into primitive types (it is impossible for this
-			// to happen on first iteration)
-			
-			if ($isPrimitive) {
-				throw new \InvalidArgumentException(
-						"Cannot traverse into primitive type $className "
-						. "to satisfy reference '{$field->field}' "
-						. "of full reference '$dottedReference'"
-				);
-			}
-			
-			$currentClass = new \ReflectionClass($className);
-			$property = $currentClass->getProperty($field->field);
-			$properties[] = $property;
-			
-			// We're done? We'll return $property at the end.
-			
-			if ($i + 1 >= $fieldCount)
-				break;
-			
-			$className = $this->getTypeFromProperty($property);
-			if (!$className)
-				throw new \InvalidArgumentException(
-					"Failed to reflect on field reference '$dottedReference' of class {$originalClass->getName()}");
-			
-		}
-		
-		return $properties;
-	}
-	
-	private function isPrimitiveType($type)
-	{
-		return preg_match('#^<.*>$#', $type);
-	}
-	
-	/**
-	 * Create a map for an array/stdclass to an object providing @FromRequest annotations
-	 * 
-	 * @param string $source The root path string of an anonymous object which will source this mapping.
-	 * @param object $destination An object with a class providing some @FromRequest annotations (or not whatever)
-	 */
-	public function mapToModel($destinationOrClass) {
-		
-		$type = new \ReflectionClass($destinationOrClass);
-		$map = new MapBuilder();
-		
-		foreach ($type->getProperties() as $property) {
-			$fromRequest = $this->annotationReader->getPropertyAnnotation(
-					$property, 'Rezonant\MapperBundle\Annotations\FromRequest');
-			
-			if (!$fromRequest)
-				continue;
-			
-			$name = $fromRequest->value;
-			if (!$name)
-				$name = $property->name;
-			
-			$subtype = $this->getTypeFromProperty($property);
-			$submap = null;
-			
-			if ($subtype) {
-				$submap = $this->mapToModel($subtype);
-			}
-			
-			$map->field($name, $property->name, array($subtype), $submap);
-		}
-		
-		return $map->build();
-	}
-	
-	/**
-	 * Get the designated class name from the given property
-	 * 
-	 * @param mixed $property Can be either a \ReflectionProperty or a primitive string type.
-	 * @return string If $property was a primitive string type (ie <array>) then that string is returned.
-	 *					If $property is a \ReflectionProperty, the type of that property is returned, or null if
-	 *					one could not be determined.
-	 */
-	private function getTypeFromProperty($property)
-	{
-		if ($this->isPrimitiveType($property))
-			return $property;
-		
-		if (is_string($property)) {
-			throw new \InvalidArgumentException(
-					'Parameter $property cannot be a string unless the string is a valid primitive type'
-			);
-		}
-		
-		$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
-				$property, 'Rezonant\\MapperBundle\\Annotations\\Type');
-		
-		if (!$typeAnnotation)
-			return null;
-		
-		return $typeAnnotation->value;
-	}
-	
-	/**
-	 * Parses the given string path into an intermediate representation suitable for use
-	 * with the other functions within this service
-	 * 
-	 * @param string $path A string path like "foo.bar.[baz]"
-	 * @return array An array of objects, each object with a 'type' (array or object) 
-	 *					  and a 'field' (name of the field)
-	 */
-	private function parsePath($path)
-	{
-		if (!is_string($path))
-			throw new \InvalidArgumentException('Parameter $path must be a string');
-		
-		$split = explode('.', $path);
-		$retPath = array();
-		
-		foreach ($split as $part) {
-			
-			if ($part[0] == '[') {
-				$retPath[] = (object)array(
-					'type' => 'array',
-					'field' => preg_replace('#^\[(.*)\]$#', '\1', $part)
-				);
-			} else {
-				$retPath[] = (object)array(
-					'type' => 'object',
-					'field' => $part
-				);
-			}
-		}
-		
-		return $retPath;
+		return $destination;
 	}
 	
 	/**
@@ -317,7 +88,7 @@ class Mapper {
 	 * @param object $destination
 	 * @param string $fieldName
 	 */
-	private function fabricateInstance($destination, $fieldName, $destinationType = null)
+	private function fabricateInstance($destinationType = null)
 	{
 		if ($destinationType == '<array>')
 			return array();
@@ -385,7 +156,7 @@ class Mapper {
 				
 				if ($destinationClass && $map) {	
 					$nextDestination = new $destinationClass();
-					$this->mapExplicitly($value, $nextDestination, $currentMap);
+					$nextDestination = $this->map($value, $nextDestination, $currentMap);
 					$this->set($current, $field, $nextDestination);
 				} else {
 					$this->set($current, $field, $value);
@@ -409,12 +180,12 @@ class Mapper {
 			if (!$this->get($current, $field)) {
 				// This needs to be an object! Make it so!
 				
-				$fieldValue = &$this->fabricateInstance($current, $field->field, 
-						$mapField? $mapField->getDestinationType() : $destinationClass);
+				$fieldValue = &$this->fabricateInstance(
+					$mapField? $mapField->getDestinationType() : $destinationClass
+				);
 				
 				$this->set($current, $field, $fieldValue);
 				
-				//$fieldValue = &$this->get($current, $field);
 				$current = &$fieldValue;
 			} else {
 				$current = &$this->get($current, $field);
@@ -432,16 +203,14 @@ class Mapper {
 			return $current;
 		else
 			return $visited[0];
-		
-		//return $originalDestination;
 	}
 	
 	/**
 	 * Sets the property named $fieldName on $instance to $value.
 	 * 
-	 * @param object $instance
-	 * @param string $fieldName
-	 * @param mixed $value
+	 * @param object $instance The instance for which the field will be set to the value
+	 * @param mixed $field A string field name, a field reference object, or an array of field reference objects
+	 * @param mixed $value The value to set the field to
 	 */
 	private function set(&$instance, $field, &$value)
 	{
@@ -479,7 +248,7 @@ class Mapper {
 	 * Gets the value of the property named $field on $instance.
 	 * 
 	 * @param object $instance
-	 * @param mixed $field A string path (see parsePath()), an array of path field reference objects,
+	 * @param mixed $field A string path (see PathParser), an array of path field reference objects,
 	 *						or a single field reference object. 
 	 * @return mixed
 	 * @throws \Exception Thrown if no such field/property exists
@@ -487,7 +256,7 @@ class Mapper {
 	private function get(&$instance, $field)
 	{	
 		if (is_string($field))
-			$field = $this->parsePath($field);
+			$field = $this->pathParser->parse($field);
 		
 		if (is_array($field))
 			$path = $field;

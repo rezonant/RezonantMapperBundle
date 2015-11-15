@@ -3,6 +3,8 @@
 namespace Rezonant\MapperBundle\Tests;
 use Rezonant\MapperBundle\Tests\Fixtures\FixtureA as FixtureA;
 use Rezonant\MapperBundle\Tests\Fixtures\FixtureB as FixtureB;
+use Rezonant\MapperBundle\Mapper;
+use Rezonant\MapperBundle\Providers\AnnotationMapProvider;
 
 class MapperTest extends \PHPUnit_Framework_TestCase {
 	
@@ -11,7 +13,7 @@ class MapperTest extends \PHPUnit_Framework_TestCase {
 	 */
 	private function makeMapper()
 	{
-		return new \Rezonant\MapperBundle\Mapper(new \Doctrine\Common\Annotations\AnnotationReader());
+		return new Mapper(new AnnotationMapProvider(new \Doctrine\Common\Annotations\AnnotationReader()));
 	}
 	
 	public function testFromModelBasic()
@@ -23,7 +25,7 @@ class MapperTest extends \PHPUnit_Framework_TestCase {
 		$source->name = 'foo';
 		$source->rank = 123;
 		
-		$mapper = new \Rezonant\MapperBundle\Mapper(new \Doctrine\Common\Annotations\AnnotationReader());
+		$mapper = $this->makeMapper();
 		$destination = $mapper->map($source, 'Rezonant\MapperBundle\Tests\Fixtures\FixtureA\Destination');
 		
 		print_r($destination);
@@ -47,7 +49,7 @@ class MapperTest extends \PHPUnit_Framework_TestCase {
 		
 		$mapper = $this->makeMapper();
 		$model = $mapper->map($request, 'Rezonant\MapperBundle\Tests\Fixtures\FixtureA\Source');
-		
+	
 		$this->assertEquals('bar', $model->name);
 		$this->assertEquals(321, $model->rank);
 		$this->assertEquals('Rezonant\MapperBundle\Tests\Fixtures\FixtureA\SourceDetails', get_class($model->details));
