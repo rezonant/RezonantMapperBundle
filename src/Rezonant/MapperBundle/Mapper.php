@@ -319,25 +319,6 @@ class Mapper {
 	 */
 	private function fabricateInstance($destination, $fieldName, $destinationType = null)
 	{
-		if (!$destinationType) {
-			throw new \Exception("Obsolete");
-			$class = new \ReflectionClass($destination);
-			$prop = $class->getProperty($fieldName);
-
-			$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
-					$prop, 'Rezonant\\MapperBundle\\Annotations\\Type');
-
-			if (!$typeAnnotation) {
-				throw new FabricationFailedException(
-					"Cannot fabricate instance for field "
-					. get_class($destination)."::\$$fieldName: "   
-					. "No @Mapper\Type annotation present."
-				);
-			}
-
-			$destinationType = $typeAnnotation->value;
-		}
-		
 		if ($destinationType == '<array>')
 			return array();
 		
