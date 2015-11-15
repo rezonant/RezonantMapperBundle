@@ -2,6 +2,7 @@
 
 namespace Rezonant\MapperBundle\Cache;
 use Rezonant\MapperBundle\Providers\MapProvider;
+use Rezonant\MapperBundle\Utilities\Reflector;
 
 /**
  * 
@@ -21,12 +22,8 @@ class CacheProvider extends MapProvider {
 		if (is_string($object))
 			return $object;
 		
-		if (is_array($object))
-			return '<array>';
-		if (is_object($object))
-			return get_class($object);
-		
-		return '<unknown>';
+		$reflector = new Reflector();
+		return $reflector->describeType($object);
 	}
 	
 	/**

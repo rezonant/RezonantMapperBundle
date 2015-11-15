@@ -12,6 +12,36 @@ class Configuration implements ConfigurationInterface {
 
 		$rootNode
 			->children()
+				->arrayNode('caching')
+					->children()
+						->booleanNode('enabled')
+							->defaultFalse()
+						->end()
+						->scalarNode('strategy')
+							->defaultValue('\Rezonant\MapperBundle\Cache\Strategies\MemoryCacheStrategy')
+						->end()
+					->end()
+				->end()
+				->arrayNode('providers')
+					->children()
+						->arrayNode('annotations')
+							->children()
+								->booleanNode('enabled')
+									->defaultTrue()
+								->end()
+							->end()
+						->end()
+						->arrayNode('config')
+							->children()
+								->booleanNode('enabled')
+									->defaultTrue()
+								->end()
+							->end()
+						->end()
+						->arrayNode('custom')
+						->end()
+					->end()
+				->end()
 				->arrayNode('maps')
 					->children()
 						->scalarNode('source')->end()
@@ -20,5 +50,16 @@ class Configuration implements ConfigurationInterface {
 							->children()
 								->scalarNode('from')->end()
 								->scalarNode('to')->end()
+								->scalarNode('type')->end()
+								->scalarNode('types')->end()
+								->scalarNode('map')->end()
+				
+							->end()
+						->end()
+					->end()
+				->end()
+			->end();
+		
+		return $treeBuilder;
 	}
 }

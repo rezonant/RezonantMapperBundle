@@ -1,11 +1,23 @@
 
 services:
     rezonant.mapper:
-        class: \Rezonant\MapperBundle\Mapper
+        class: Rezonant\MapperBundle\Mapper
         arguments: ['@rezonant.mapper.map_provider']
         
     rezonant.mapper.map_provider:
-        alias: rezonant.mapper.annotation_map_provider
+        class: Rezonant\MapperBundle\Providers\MapProviderInterface
+        factory: [Rezonant\MapperBundle\Providers\ConfiguredMapProviderFactory, createProvider]
+        arguments: ['@service_container']
+        
+    #rezonant.mapper.cache.strategy:
+    #    class: Rezonant\MapperBundle\Cache\CacheStrategyInterface
+    #    factory: [Rezonant\MapperBundle\Cache\ConfiguredCacheStrategyFactory, createStrategy]
+    #    arguments: ['@service_container']
+        
     rezonant.mapper.annotation_map_provider:
-        class: \Rezonant\MapperBundle\Providers\AnnotationMapProvider
+        class: Rezonant\MapperBundle\Providers\AnnotationMapProvider
         arguments: ['@annotation_reader']
+        
+    rezonant.mapper.config_map_provider:
+        class: Rezonant\MapperBundle\Providers\ConfigMapProvider
+        arguments: []
