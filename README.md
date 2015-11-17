@@ -51,6 +51,16 @@ strict semantic versioning will be followed.
 
     $ composer require rezonant/mapper-bundle=dev-master
 
+You must also depend on the bundle within app/AppKernel.php:
+
+    $bundles = array(
+        ...,
+        new Rezonant\MapperBundle\RezonantMapperBundle()
+    )
+
+If you fail to do so, you will be able to use the bundle's classes, but none of the Symfony DI services will be 
+available, and your configurations will be ignored.
+
 # Using the Mapper service
 
 The simplest way to call Mapper is by allowing a map provider to do the heavy lifting:
