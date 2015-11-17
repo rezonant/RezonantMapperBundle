@@ -202,7 +202,7 @@ class Mapper {
 				
 				$current = &$fieldValue;
 			} else {
-				$current = &$this->get($current, $field);
+				$current = $this->get($current, $field);
 			}
 			
 			if ($currentMap && $mapField) {
