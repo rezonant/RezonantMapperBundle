@@ -33,7 +33,7 @@ One reason for this is that you may have to support multiple versions of your AP
 from your RESTful model into an underlying persistence object? 
 
 RezonantMapperBundle provides a simple but powerful way to accomplish object-to-object mapping. The built-in annotation-based
-mapper allows you to declaratively specify the destination fields of fields on the source object. Note that destination-driven
+mapper allows you to declaratively specify the destinations for fields on the source object. Note that destination-driven
 annotations are not available, but they could be easily added in by writing a new variant of AnnotationMapProvider.
 
 The decision to focus on source-driven annotations is influenced by the primary use case of this library: to map 

@@ -1,7 +1,7 @@
 {
     "name": "rezonant/mapper-bundle",
 	"type": "symfony-bundle",
-    "description": "Provides an object-mapping framework",
+    "description": "A Symfony2 bundle providing a flexible mechanism for object-to-object mapping (and back)",
 	"keywords": ["mapping", "models"],
 	"homepage": "http://github.com/rezonant/mapper-bundle",
 	"license": "MIT",
