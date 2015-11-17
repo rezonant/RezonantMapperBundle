@@ -194,7 +194,7 @@ class Mapper {
 			if (!$this->get($current, $field)) {
 				// This needs to be an object! Make it so!
 				
-				$fieldValue = &$this->fabricateInstance(
+				$fieldValue = $this->fabricateInstance(
 					$mapField? $mapField->getDestinationType() : $destinationClass
 				);
 				
