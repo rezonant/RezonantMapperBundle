@@ -3,11 +3,12 @@
 namespace Rezonant\MapperBundle\Cache;
 use Rezonant\MapperBundle\Providers\MapProvider;
 use Rezonant\MapperBundle\Utilities\Reflector;
+use Rezonant\MapperBundle\Providers\MapProviderInterface;
 
 /**
  * 
  */
-class CacheProvider extends MapProvider { 
+class CacheProvider extends MapProvider implements MapProviderInterface { 
 	
 	public function __construct(MapProviderInterface $provider, CacheStrategyInterface $strategy) {
 		$this->provider = $provider;
@@ -16,6 +17,14 @@ class CacheProvider extends MapProvider {
 	
 	private $provider;
 	private $strategy;
+	
+	function getProvider() {
+		return $this->provider;
+	}
+	
+	function getStrategy() {
+		return $this->strategy;
+	}
 	
 	private static function describeType($object)
 	{
@@ -34,13 +43,13 @@ class CacheProvider extends MapProvider {
 	 * @param mixed $destination
 	 * @return string
 	 */
-	public static function getCacheKey($source, $destination)
+	public static function getCacheKey($source, $destination, $back)
 	{
-		return self::describeType($source).' => '.self::describeType($destination);
+		return self::describeType($source).($back? ' <= ' : ' => ').self::describeType($destination);
 	}
 	
-	public function getMap($source, $destination) {
-		$key = self::getCacheKey($source, $destination);
+	public function getMap($source, $destination, $back = false) {
+		$key = self::getCacheKey($source, $destination, $back);
 		$map = $this->strategy->get($key);
 		$miss = !$map;
 		

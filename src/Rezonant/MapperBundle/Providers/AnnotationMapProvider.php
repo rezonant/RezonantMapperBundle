@@ -1,17 +1,25 @@
 <?php
 
 namespace Rezonant\MapperBundle\Providers;
-use Doctrine\Common\Annotations\AnnotationReader;
+use Doctrine\Common\Annotations\Reader;
 use Rezonant\MapperBundle\Utilities\PathParser;
 use Rezonant\MapperBundle\MapBuilder;
+use Rezonant\MapperBundle\Map\Reference;
+use Rezonant\MapperBundle\Utilities\Reflector;
 
 class AnnotationMapProvider extends MapProvider {
 	
-	public function __construct(AnnotationReader $reader) {
+	public function __construct(Reader $reader) {
 		$this->annotationReader = $reader;
 		$this->pathParser = new PathParser();
+		$this->reflector = new Reflector();
 	}
 
+	/**
+	 * @var Reflector
+	 */
+	private $reflector;
+	
 	/**
 	 * @var PathParser
 	 */
@@ -23,22 +31,17 @@ class AnnotationMapProvider extends MapProvider {
 	private $annotationReader;
 	
 	public function getMap($source, $destination) {
-		// Standard classes/arrays
+		
+		// Standard classes/arrays (Deprecated?)
 		if ($this->isStandard($source) && $this->isStandard($destination)) {
 			$map = new MapBuilder();
 			foreach ($source as $k => $v) {
-				$map->field($k, $k);
+				$map->field(new Reference($k), new Reference($k));
 			}
 			
 			return $map->build();
 		}
 		
-		// ie: Request -> Model
-		if ($this->isStandard($source)) {
-			return $this->mapToModel($destination);
-		}
-		
-		// ie: Model -> Entity
 		return $this->mapFromModel($source, $destination);
 	}
 	
@@ -58,7 +61,7 @@ class AnnotationMapProvider extends MapProvider {
 			
 			// Resolve the type of this property for submapping later.
 			
-			$subSourceType = $this->getTypeFromProperty($property);
+			$subSourceType = $this->reflector->getTypeFromProperty($property);
 			$subDestType = null;
 			$fieldValue = null;
 			$submap = null;
@@ -75,56 +78,18 @@ class AnnotationMapProvider extends MapProvider {
 			// Resolve the destination field's type for generating a submap.
 			
 			if ($destinationField) {
-				$subDeepProperties = $this->getDeepProperty($destinationClass, $destinationField);
-				$self = $this;
-				$subDestTypes = array_map(
-					function($prop) use ($self) { 
-						return $self->getTypeFromProperty($prop);
-					}, $subDeepProperties);
-				
+				$destReference = new Reference($destinationField, $destinationClass);
+				$subDestTypes = $destReference->getTypes();
 				$subDestType = $subDestTypes[count($subDestTypes) - 1];
+				
+				if ($subSourceType && $subDestType)
+					$submap = $this->mapFromModel ($subSourceType, $subDestType);
+			
+				$map->field(
+					new Reference($property->name, $class), 
+					$destReference, 
+					$submap);
 			}
-			
-			if ($subSourceType && $subDestType)
-				$submap = $this->mapFromModel ($subSourceType, $subDestType);
-			
-			if ($destinationField)
-				$map->field($property->name, $destinationField, $subDestTypes, $submap);
-		}
-		
-		return $map->build();
-	}
-	
-	/**
-	 * Create a map for an array/stdclass to an object providing @FromRequest annotations
-	 * 
-	 * @param string $source The root path string of an anonymous object which will source this mapping.
-	 * @param object $destination An object with a class providing some @FromRequest annotations (or not whatever)
-	 */
-	public function mapToModel($destinationOrClass) {
-		
-		$type = new \ReflectionClass($destinationOrClass);
-		$map = new MapBuilder();
-		
-		foreach ($type->getProperties() as $property) {
-			$fromRequest = $this->annotationReader->getPropertyAnnotation(
-					$property, 'Rezonant\MapperBundle\Annotations\FromRequest');
-			
-			if (!$fromRequest)
-				continue;
-			
-			$name = $fromRequest->value;
-			if (!$name)
-				$name = $property->name;
-			
-			$subtype = $this->getTypeFromProperty($property);
-			$submap = null;
-			
-			if ($subtype) {
-				$submap = $this->mapToModel($subtype);
-			}
-			
-			$map->field($name, $property->name, array($subtype), $submap);
 		}
 		
 		return $map->build();
@@ -186,7 +151,7 @@ class AnnotationMapProvider extends MapProvider {
 			if ($i + 1 >= $fieldCount)
 				break;
 			
-			$className = $this->getTypeFromProperty($property);
+			$className = $this->reflector->getTypeFromProperty($property);
 			if (!$className)
 				throw new \InvalidArgumentException(
 					"Failed to reflect on field reference '$dottedReference' of class {$originalClass->getName()}");
@@ -194,34 +159,6 @@ class AnnotationMapProvider extends MapProvider {
 		}
 		
 		return $properties;
-	}
-	
-	/**
-	 * Get the designated class name from the given property
-	 * 
-	 * @param mixed $property Can be either a \ReflectionProperty or a primitive string type.
-	 * @return string If $property was a primitive string type (ie <array>) then that string is returned.
-	 *					If $property is a \ReflectionProperty, the type of that property is returned, or null if
-	 *					one could not be determined.
-	 */
-	private function getTypeFromProperty($property)
-	{
-		if ($this->isPrimitiveType($property))
-			return $property;
-		
-		if (is_string($property)) {
-			throw new \InvalidArgumentException(
-					'Parameter $property cannot be a string unless the string is a valid primitive type'
-			);
-		}
-		
-		$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
-				$property, 'Rezonant\\MapperBundle\\Annotations\\Type');
-		
-		if (!$typeAnnotation)
-			return null;
-		
-		return $typeAnnotation->value;
 	}
 	
 }

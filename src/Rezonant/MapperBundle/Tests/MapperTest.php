@@ -5,6 +5,7 @@ use Rezonant\MapperBundle\Tests\Fixtures\FixtureA as FixtureA;
 use Rezonant\MapperBundle\Tests\Fixtures\FixtureB as FixtureB;
 use Rezonant\MapperBundle\Mapper;
 use Rezonant\MapperBundle\Providers\AnnotationMapProvider;
+use Rezonant\MapperBundle\Map\Reference;
 
 class MapperTest extends \PHPUnit_Framework_TestCase {
 	
@@ -28,35 +29,28 @@ class MapperTest extends \PHPUnit_Framework_TestCase {
 		$mapper = $this->makeMapper();
 		$destination = $mapper->map($source, 'Rezonant\MapperBundle\Tests\Fixtures\FixtureA\Destination');
 		
-		print_r($destination);
 		$this->assertEquals('foo', $destination->name123);
 		$this->assertEquals('Rezonant\MapperBundle\Tests\Fixtures\FixtureA\SourceDetails', get_class($destination->detailsABC));
 		$this->assertEquals(123, $destination->dest->rank);
 		
 	}
 	
-	public function testToModelBasic()
+	public function testFromModelInvertedBasic()
 	{
 		$fixture = new FixtureA\FixtureA();
-		$request = array(
-			'name' => 'bar',
-			'rank123' => 321,
-			'details' => array(
-				'description' => 'descy',
-				'summary' => 'summy'
-			)
-		);
+		 
+		$source = new FixtureA\Source();
+		$source->details = new FixtureA\SourceDetails();
+		$source->name = 'foo';
+		$source->rank = 123;
 		
 		$mapper = $this->makeMapper();
-		$model = $mapper->map($request, 'Rezonant\MapperBundle\Tests\Fixtures\FixtureA\Source');
-	
-		$this->assertEquals('bar', $model->name);
-		$this->assertEquals(321, $model->rank);
-		$this->assertEquals('Rezonant\MapperBundle\Tests\Fixtures\FixtureA\SourceDetails', get_class($model->details));
-		$this->assertEquals('descy', $model->details->getDescription());
-		$this->assertEquals('summy', $model->details->getSummary());
-		//$this->assertEquals('descy', $model->detailsDescription);
-		//$this->assertEquals('summy', $model->detailsSummary);
+		$intermediate = $mapper->map($source, 'Rezonant\MapperBundle\Tests\Fixtures\FixtureA\Destination');
+		$destination = $mapper->mapBack($intermediate, 'Rezonant\MapperBundle\Tests\Fixtures\FixtureA\Source');
+		
+		$this->assertEquals('foo', $destination->name);
+		$this->assertEquals('Rezonant\MapperBundle\Tests\Fixtures\FixtureA\SourceDetails', get_class($destination->details));
+		$this->assertEquals(123, $destination->rank);
 		
 	}
 	
@@ -88,8 +82,8 @@ class MapperTest extends \PHPUnit_Framework_TestCase {
 		
 		$mapper = $this->makeMapper();
 		$mapBuilder = new \Rezonant\MapperBundle\MapBuilder();
-		$mapBuilder->field('a', 'c');
-		$mapBuilder->field('b', 'd');
+		$mapBuilder->field(new Reference('a'), new Reference('c'));
+		$mapBuilder->field(new Reference('b'), new Reference('d'));
 		
 		$dest = $mapper->map($source, array(), $mapBuilder->build());
 		
@@ -109,8 +103,8 @@ class MapperTest extends \PHPUnit_Framework_TestCase {
 		
 		$mapper = $this->makeMapper();
 		$mapBuilder = new \Rezonant\MapperBundle\MapBuilder();
-		$mapBuilder->field('a', 'c');
-		$mapBuilder->field('b', 'd');
+		$mapBuilder->field(new Reference('a'), new Reference('c'));
+		$mapBuilder->field(new Reference('b'), new Reference('d'));
 		
 		$dest = $mapper->map($source, (object)array(), $mapBuilder->build());
 		
@@ -130,8 +124,8 @@ class MapperTest extends \PHPUnit_Framework_TestCase {
 		
 		$mapper = $this->makeMapper();
 		$mapBuilder = new \Rezonant\MapperBundle\MapBuilder();
-		$mapBuilder->field('a', 'c');
-		$mapBuilder->field('b', 'd');
+		$mapBuilder->field(new Reference('a'), new Reference('c'));
+		$mapBuilder->field(new Reference('b'), new Reference('d'));
 		
 		$dest = $mapper->map($source, array(), $mapBuilder->build());
 		
@@ -151,8 +145,8 @@ class MapperTest extends \PHPUnit_Framework_TestCase {
 		
 		$mapper = $this->makeMapper();
 		$mapBuilder = new \Rezonant\MapperBundle\MapBuilder();
-		$mapBuilder->field('a', 'c');
-		$mapBuilder->field('b', 'd');
+		$mapBuilder->field(new Reference('a'), new Reference('c'));
+		$mapBuilder->field(new Reference('b'), new Reference('d'));
 		
 		$dest = $mapper->map($source, (object)array(), $mapBuilder->build());
 		

@@ -3,6 +3,7 @@ rezonant_mapper:
     providers: 
         annotations: 
             enabled: true
+        
         config:
             enabled: true
         custom:

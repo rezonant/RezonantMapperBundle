@@ -1,8 +1,64 @@
 <?php
 
 namespace Rezonant\MapperBundle\Utilities;
+use Doctrine\Common\Annotations\Reader;
+use Doctrine\Common\Annotations\AnnotationReader;
 
 class Reflector {
+	public function __construct(Reader $reader = NULL) {
+		if (!$reader)
+			$reader = new AnnotationReader();
+		$this->annotationReader = $reader;
+	}
+	
+	/**
+	 * @var Reader
+	 */
+	private $annotationReader;
+	
+	/**
+	 * Get the designated class name from the given property
+	 * 
+	 * @param mixed $property Can be either a \ReflectionProperty or a primitive string type.
+	 * @return string If $property was a primitive string type (ie <array>) then that string is returned.
+	 *					If $property is a \ReflectionProperty, the type of that property is returned, or null if
+	 *					one could not be determined.
+	 */
+	public function getTypeFromProperty($property)
+	{
+		if ($this->isPrimitiveType($property))
+			return $property;
+		
+		if (is_string($property)) {
+			throw new \InvalidArgumentException(
+					'Parameter $property cannot be a string unless the string is a valid primitive type'
+			);
+		}
+		
+		$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
+				$property, 'Rezonant\\MapperBundle\\Annotations\\Type');
+		if ($typeAnnotation)
+			return $typeAnnotation->value;
+		
+		$typeAnnotation = $this->annotationReader->getPropertyAnnotation(
+				$property, 'JMS\\Serializer\\Annotation\\Type');
+		
+		if ($typeAnnotation)
+			return $typeAnnotation->value;
+		
+		return null;
+	}
+	
+	public function isStandard($object)
+	{
+		return is_array($object) || (is_object($object) && get_class($object) == 'stdclass');
+	}
+	
+	public function isPrimitiveType($type)
+	{
+		return preg_match('#^<.*>$#', $type);
+	}
+	
 	public function describeType($object)
 	{
 		if (is_null($object))

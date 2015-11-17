@@ -1,6 +1,9 @@
 <?php
 
 namespace Rezonant\MapperBundle;
+use Rezonant\MapperBundle\Map\Map;
+use Rezonant\MapperBundle\Map\MapField;
+use Rezonant\MapperBundle\Map\Reference;
 
 class MapBuilder {
 	private $fields = array();
@@ -11,17 +14,11 @@ class MapBuilder {
 	 * @param Map $map
 	 * @return MapBuilder
 	 */
-	public function field($sourceFieldName, $destinationFieldName, $destinationTypes = NULL, Map $map = NULL)
+	public function field(Reference $source, Reference $dest, Map $map = NULL)
 	{
-		if (is_null($sourceFieldName))
-			throw new \InvalidArgumentException('$sourceFieldName cannot be null');
-		
-		if (is_null($destinationFieldName))
-			throw new \InvalidArgumentException('$destinationFieldName cannot be null');
-		
-		$mapField = new MapField($sourceFieldName);
-		$mapField->setDestinationField($destinationFieldName);
-		$mapField->setDestinationTypes($destinationTypes);
+		$mapField = new MapField();
+		$mapField->setSource($source);
+		$mapField->setDestination($dest);
 		$mapField->setSubmap($map);
 		$this->fields[] = $mapField;
 		

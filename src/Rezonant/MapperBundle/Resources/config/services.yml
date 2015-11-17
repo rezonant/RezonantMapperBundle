@@ -18,6 +18,9 @@ services:
         class: Rezonant\MapperBundle\Providers\AnnotationMapProvider
         arguments: ['@annotation_reader']
         
+    rezonant.mapper.config_map_provider.maps:
+        synthetic: true
+    
     rezonant.mapper.config_map_provider:
         class: Rezonant\MapperBundle\Providers\ConfigMapProvider
-        arguments: []
+        arguments: ['%rezonant.mapper.providers.config.maps%']

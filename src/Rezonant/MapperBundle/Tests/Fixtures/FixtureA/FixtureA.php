@@ -7,13 +7,11 @@ class FixtureA { }
 	class Source {
 		/**
 		 * @Mapper\MapTo("name123")
-		 * @Mapper\FromRequest()
 		 * @var string
 		 */
 		public $name;
 		
 		/**
-		 * @Mapper\FromRequest("rank123")
 		 * @Mapper\MapTo("dest.rank")
 		 * @var int
 		 */
@@ -22,30 +20,25 @@ class FixtureA { }
 		/**
 		 * @Mapper\Type("Rezonant\MapperBundle\Tests\Fixtures\FixtureA\SourceDetails")
 		 * @Mapper\MapTo("detailsABC")
-		 * @Mapper\FromRequest()
 		 * @var SourceDetails
 		 */
 		public $details;
 		
 		/**
-		 * @Mapper\FromRequest("details.summary")
 		 */
 		public $detailsSummary;
 		
 		/**
-		 * @Mapper\FromRequest("details.description")
 		 */
 		public $detailsDescription;
 	}
 
 	class SourceDetails {
 		/**
-		 * @Mapper\FromRequest()
 		 */
 		private $description;
 		
 		/**
-		 * @Mapper\FromRequest()
 		 */
 		private $summary;
 		

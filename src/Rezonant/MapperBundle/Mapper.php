@@ -7,6 +7,7 @@ use Rezonant\MapperBundle\Exceptions\FabricationFailedException;
 use Rezonant\MapperBundle\Utilities\PathParser;
 use Rezonant\MapperBundle\Exceptions\UnableToMapException;
 use Rezonant\MapperBundle\Providers\MapProviderInterface;
+
 /**
  * Maps between two objects
  */
@@ -29,6 +30,20 @@ class Mapper {
 	 * @var PathParser
 	 */
 	private $pathParser;
+	
+	public function mapBack($source, $destination, $forwardMap = NULL)
+	{
+		// Create a forward map if none is provided
+		if (!$forwardMap) {
+			$forwardMap = $this->mapProvider->getMap($destination, $source);
+			if (!$forwardMap)
+				throw new UnableToMapException($this->mapProvider, $destination, $source);
+		}
+		
+		$reverseMap = $forwardMap->invert();
+		
+		return $this->map($source, $destination, $reverseMap);
+	}
 	
 	/**
 	 * Map from the given source to the given destination. This is the primary method of this
@@ -69,12 +84,12 @@ class Mapper {
 		}
 		
 		foreach ($map->getFields() as $field) {
-			$name = $field->getName();
-			$destinationField = $this->pathParser->parse($field->getDestinationField());
+			$name = $field->getSource()->toString();
+			$destinationField = $field->getDestination()->getFields();
 			$value = $this->get($source, $name);
 			
 			$destination = $this->deepSet($destination, $destinationField, $value, 
-					$field->getDestinationTypes(), $field->getSubmap());
+					$field->getDestination()->getTypes(), $field->getSubmap());
 		}
 		
 		return $destination;
@@ -252,7 +267,7 @@ class Mapper {
 	 * @return mixed
 	 * @throws \Exception Thrown if no such field/property exists
 	 */
-	private function get(&$instance, $field)
+	private function get($instance, $field)
 	{	
 		if (is_string($field))
 			$field = $this->pathParser->parse($field);
@@ -266,7 +281,7 @@ class Mapper {
 		
 		$contextObject = &$instance;
 		foreach ($path as $i => $item) {
-			if ($i == 0)
+			if ($i + 1 >= count($path))
 				continue;
 			$contextObject = &$this->get($contextObject, $item);
 		}
