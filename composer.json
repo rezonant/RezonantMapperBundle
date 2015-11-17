@@ -3,7 +3,7 @@
 	"type": "symfony-bundle",
     "description": "A Symfony2 bundle providing a flexible mechanism for object-to-object mapping (and back)",
 	"keywords": ["mapping", "models"],
-	"homepage": "http://github.com/rezonant/mapper-bundle",
+	"homepage": "http://github.com/rezonant/RezonantMapperBundle",
 	"license": "MIT",
     "authors": [
         {
@@ -12,7 +12,7 @@
         }
     ],
 	"support": {
-		"issues": "https://github.com/rezonant/mapper-bundle/issues"
+		"issues": "https://github.com/rezonant/RezonantMapperBundle/issues"
 	},
 
 	"require": {
