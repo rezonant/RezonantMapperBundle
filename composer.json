@@ -29,6 +29,6 @@
 	},
 
 	"autoload": {
-		"psr-4": { "": "src/" }
+		"psr-4": { "Rezonant\\MapperBundle\\": "src/" }
 	}
 }
