@@ -147,23 +147,15 @@ You can also specify these explicitly:
 This may be required if such information cannot be detected from reflection and/or annotations, or if you
 do not want to incur that overhead when the map is first constructed (but don't forget about the caching system)
 
-# Configuration in Symfony2
+# Usage in Symfony2
+
+Once installed you can depend on the ```@rezonant.mapper``` service to obtain a configured instance of the Mapper service.
+
+## Configuration
 
 The rezonant_mapper config section can be used for much more than just declaring maps.
 
-## Caching Configuration
-
-The included cache layer can be controlled by manipulating the "caching" section. The following shows the default values:
-
-     rezonant_mapper:
-         caching:
-             enabled: true
-             strategy: '\Rezonant\MapperBundle\Cache\Strategies\MemoryCacheStrategy'
-
-The "enabled" flag will enable/disable the caching engine. The "strategy" field lets you specify a strategy class 
-to be used. 
-
-## Enabling/Disabling Map Providers
+### Enabling/Disabling Map Providers
 
 You can control which map providers are used. The following sample shows the default values:
 
@@ -177,9 +169,21 @@ You can control which map providers are used. The following sample shows the def
 
 The "custom" field is an array of classes implementing MapProviderInterface which should be used as map providers.
 
-# Usage in Symfony2
+### Caching
 
-Once installed you can depend on the ```@rezonant.mapper``` service to obtain a configured instance of the Mapper service.
+The included cache layer can be controlled by manipulating the "caching" section of the configuration. The 
+following shows the default values:
+
+     rezonant_mapper:
+         caching:
+             enabled: false
+             strategy: 'Rezonant\MapperBundle\Cache\Strategies\MemoryCacheStrategy'
+
+The "enabled" flag will enable/disable the caching engine. The "strategy" field lets you specify a strategy class 
+to be used. You can implement your own strategies by implementing Rezonant\MapperBundle\Cache\CacheStrategyInterface
+or use one of the built-in ones found within the Rezonant\MapperBundle\Cache\Strategies namespace. Of particular note
+is the DoctrineCacheStrategy, which will allow you to wrap any Doctrine-Commons Cache object. Doctrine-Commons comes with
+a number of cache providers including APC and Memcache.
 
 # Usage outside of Symfony2
 
@@ -189,13 +193,25 @@ that will likely change in the future. In the mean time, even if you are not usi
 this project using Composer and construct a Mapper service manually using the Rezonant\MapperBundle\Mapper class. 
 Should you construct your own instance, you should provide a MapProvider instance (we recommend AnnotationMapper, 
 you will need to depend on Doctrine Commons and provide an AnnotationReader). If you intend to always pass 
-explicit maps you can pass NULL for the map provider.
+explicit maps you can pass NULL for the map provider. 
 
 	 use Rezonant\MapperBundle\Mapper;
 	 use Rezonant\MapperBundle\Providers\AnnotationMapProvider;
 	 use Doctrine\Common\Annotations\AnnotationReader;
 
      $mapper = new Mapper(new AnnotationMapProvider(new AnnotationReader()));
+
+You could also use Rezonant\MapperBundle\Providers\ConfigMapProvider to inject a number of premade maps into the Mapper
+service. Simply construct your maps (manually or using Rezonant\MapperBundle\MapBuilder) and pass them as an array into
+a new ConfigMapProvider, then use that for your Mapper instance.
+
+## Caching
+
+Caching can be used without using the Symfony configuration layer by constructing a CacheProvider and passing your
+MapProvider of choice to it along with your chosen CacheStrategy implementation. You can moderate between 
+several MapProviders by using the Rezonant\MapperBundle\Providers\MapProviderModerator class. This is how the 
+Symfony bundle internally constructs the MapProvider for the Mapper service based on the rezonant_mapper configuration
+section.
 
 # Testing
 
