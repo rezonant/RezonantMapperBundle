@@ -1,5 +1,7 @@
 # Rezonant's MapperBundle
 
+[![Build Status](https://travis-ci.org/rezonant/RezonantMapperBundle.svg?branch=master)](https://travis-ci.org/rezonant/RezonantMapperBundle)
+
 NOTE: This library is NOT ready for general use! This is sooo pre-alpha!
 
 This Symfony2 bundle provides a flexible mechanism for object-to-object mapping (and back).
