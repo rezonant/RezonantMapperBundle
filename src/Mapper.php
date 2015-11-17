@@ -283,7 +283,7 @@ class Mapper {
 		foreach ($path as $i => $item) {
 			if ($i + 1 >= count($path))
 				continue;
-			$contextObject = &$this->get($contextObject, $item);
+			$contextObject = $this->get($contextObject, $item);
 		}
 		
 		$fieldName = $path[count($path)-1]->field;
