@@ -54,7 +54,7 @@ class Configuration implements ConfigurationInterface {
 									->scalarNode('type')->end()
 									->scalarNode('types')->end()
 									->scalarNode('map')->end()
-
+									->scalarNode('transformation')->end()
 								->end()
 							->end()
 						->end()

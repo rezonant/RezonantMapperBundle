@@ -3,6 +3,7 @@ namespace Rezonant\MapperBundle\Transformation;
 use Doctrine\Bundle\DoctrineBundle\Registry;
 use Doctrine\Common\Persistence\ObjectManager;
 use Rezonant\MapperBundle\Map\Reference;
+use Rezonant\MapperBundle\Exceptions\TransformationException;
 
 /**
  * DoctrineEntityTransformation
@@ -16,12 +17,6 @@ class DoctrineEntityTransformation extends AbstractTransformation {
 	 * @var Registry
 	 */
 	private $doctrine = null;
-	
-	/**
-	 *
-	 * @var ObjectManager 
-	 */
-	private $entityManager = null;
 	
 	
 	private $entityClass = null;
@@ -66,7 +61,7 @@ class DoctrineEntityTransformation extends AbstractTransformation {
 		
 		$repository = $this->doctrine->getRepository($entityClass);
 		if(!$repository){
-			throw new \Exception('Could not resolve doctrine entity from destination type');
+			throw new TransformationException('Could not resolve doctrine entity from destination type');
 		}
 		return $repository->find($sourceFieldValue);
 	}
@@ -79,6 +74,11 @@ class DoctrineEntityTransformation extends AbstractTransformation {
 		}
 		
 		$fieldName = $this->getId();
+		
+		if(!$fieldName){
+			throw new TransformationException("Doctrine Transformation failed because the id was not set correctly.");
+		}
+		
 		$methodName = "get$fieldName";
 		
 		if (method_exists($destinationFieldValue, $methodName)){

@@ -56,7 +56,14 @@ class MapField {
 		$this->submap = $submap;
 	}
 	
+	/**
+	 * When you pass in an object it will be cloned to ensure that it will not change
+	 * @param type $transformation
+	 */
 	function setTransformation($transformation){
+		if($transformation){
+			$transformation = clone $transformation;
+		}
 		$this->transformation = $transformation;
 	}
 }

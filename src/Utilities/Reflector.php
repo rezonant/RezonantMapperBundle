@@ -18,16 +18,6 @@ class Reflector {
 	
 	
 	public function getType($field) {
-		if ($this->isPrimitiveType($field)) {
-			return $field;
-		}
-		
-		if (is_string($field)) {
-			throw new \InvalidArgumentException(
-					'Parameter $property cannot be a string unless the string is a valid primitive type'
-			);
-		}
-		
 		if($field instanceof \ReflectionMethod){
 			return $this->getTypeFromMethod($field);
 		}
@@ -37,10 +27,6 @@ class Reflector {
 		}
 		
 		return null;
-		
-		/*throw new \InvalidArgumentException(
-				'Could not evaluate the type of the field because it was not primitave or a supported reflection class'
-		);*/
 	}
 	
 	/**
@@ -53,10 +39,6 @@ class Reflector {
 	 */
 	public function getTypeFromProperty($property)
 	{
-		if ($this->isPrimitiveType($property)) {
-			return $property;
-		}
-		
 		if (is_string($property)) {
 			throw new \InvalidArgumentException(
 					'Parameter $property cannot be a string unless the string is a valid primitive type'
@@ -77,13 +59,8 @@ class Reflector {
 		return null;
 	}
 
-	//IN PROGRESS!!! TODO
 	public function getTypeFromMethod($method)
 	{
-		if ($this->isPrimitiveType($method)) {
-			return $method;
-		}
-		
 		if (is_string($method)) {
 			throw new \InvalidArgumentException(
 				'Parameter $property cannot be a string unless the string is a valid primitive type'
