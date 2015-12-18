@@ -88,6 +88,11 @@ class Mapper {
 			$destinationField = $field->getDestination()->getFields();
 			$value = $this->get($source, $name);
 			
+			//if a transfermation exists apply it to the value
+			if($field->getTransformation()){
+				$value = $field->getTransformation()->transform($value, $field, $source, $destination);
+			}
+			
 			$destination = $this->deepSet($destination, $destinationField, $value, 
 					$field->getDestination()->getTypes(), $field->getSubmap());
 		}

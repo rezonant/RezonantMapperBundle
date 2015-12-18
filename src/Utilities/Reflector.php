@@ -16,6 +16,19 @@ class Reflector {
 	 */
 	private $annotationReader;
 	
+	
+	public function getType($field) {
+		if($field instanceof \ReflectionMethod){
+			return $this->getTypeFromMethod($field);
+		}
+		
+		if($field instanceof \ReflectionProperty){
+			return $this->getTypeFromProperty($field);
+		}
+		
+		return null;
+	}
+	
 	/**
 	 * Get the designated class name from the given property
 	 * 
@@ -26,9 +39,6 @@ class Reflector {
 	 */
 	public function getTypeFromProperty($property)
 	{
-		if ($this->isPrimitiveType($property))
-			return $property;
-		
 		if (is_string($property)) {
 			throw new \InvalidArgumentException(
 					'Parameter $property cannot be a string unless the string is a valid primitive type'
@@ -44,7 +54,29 @@ class Reflector {
 				$property, 'JMS\\Serializer\\Annotation\\Type');
 		
 		if ($typeAnnotation)
+			return $typeAnnotation->name;
+		
+		return null;
+	}
+
+	public function getTypeFromMethod($method)
+	{
+		if (is_string($method)) {
+			throw new \InvalidArgumentException(
+				'Parameter $property cannot be a string unless the string is a valid primitive type'
+			);
+		}
+		
+		$typeAnnotation = $this->annotationReader->getMethodAnnotation(
+				$method, 'Rezonant\\MapperBundle\\Annotations\\Type');
+		if ($typeAnnotation)
 			return $typeAnnotation->value;
+		
+		$typeAnnotation = $this->annotationReader->getMethodAnnotation(
+				$method, 'JMS\\Serializer\\Annotation\\Type');
+		
+		if ($typeAnnotation)
+			return $typeAnnotation->name;
 		
 		return null;
 	}

@@ -6,15 +6,24 @@ use Rezonant\MapperBundle\Utilities\PathParser;
 use Rezonant\MapperBundle\MapBuilder;
 use Rezonant\MapperBundle\Map\Reference;
 use Rezonant\MapperBundle\Utilities\Reflector;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Rezonant\MapperBundle\Exceptions\TransformationException;
 
 class AnnotationMapProvider extends MapProvider {
 	
-	public function __construct(Reader $reader) {
+	public function __construct(Reader $reader, ContainerInterface $container = null) {
 		$this->annotationReader = $reader;
 		$this->pathParser = new PathParser();
 		$this->reflector = new Reflector();
+		$this->container = $container;
 	}
 
+	/**
+	 *
+	 * @var ContainerInterface 
+	 */
+	private $container;
+	
 	/**
 	 * @var Reflector
 	 */
@@ -53,11 +62,14 @@ class AnnotationMapProvider extends MapProvider {
 	public function mapFromModel($modelOrClass, $entityOrClass) {
 		$class = new \ReflectionClass($modelOrClass);
 		$annotationName = 'Rezonant\\MapperBundle\\Annotations\\MapTo';
+		$transformationAnnotationName = 'Rezonant\\MapperBundle\\Annotations\\Transformation';
 		$map = new MapBuilder();
 		$destinationClass = new \ReflectionClass($entityOrClass);
 		
 		foreach ($class->getProperties() as $property) {
 			$annotation = $this->annotationReader->getPropertyAnnotation($property, $annotationName);
+			$transformationAnnotation = $this->annotationReader->getPropertyAnnotation($property, $transformationAnnotationName);
+			
 			
 			// Resolve the type of this property for submapping later.
 			
@@ -75,6 +87,9 @@ class AnnotationMapProvider extends MapProvider {
 			else if ($destinationClass->hasProperty($property->name))
 				$destinationField = $property->name;
 			
+			//Get transformation if there is one
+			$transformation = $this->getTransformationFromAnnotation($transformationAnnotation);
+			
 			// Resolve the destination field's type for generating a submap.
 			
 			if ($destinationField) {
@@ -88,11 +103,50 @@ class AnnotationMapProvider extends MapProvider {
 				$map->field(
 					new Reference($property->name, $class), 
 					$destReference, 
-					$submap);
+					$submap,
+					$transformation);
 			}
 		}
 		
 		return $map->build();
+	}
+	
+	private function getTransformationFromAnnotation($transformationAnnotation){
+		if(!$transformationAnnotation){
+			return null;
+		}
+		
+		if(!$transformationAnnotation instanceof \Rezonant\MapperBundle\Annotations\Transformation){
+			throw new TransformationException("Transformation annotations must an instance of \Rezonant\MapperBundle\Annotations\Transformation");
+		}
+		
+		$resolvedTransformation = null;
+		
+		$transformation = $transformationAnnotation->getTransformation();
+		
+		if(is_object($transformation)){
+			$resolvedTransformation = $transformation;
+		}
+		
+		if(class_exists($transformation)){
+			$resolvedTransformation = new $transformation();
+		}
+		
+		if(is_string($transformation) && $this->container->has($transformation)){
+			$resolvedTransformation = $this->container->get($transformation);
+		}
+		
+		if(!$resolvedTransformation){
+			throw new TransformationException("Could not resolve tranformation from the transformation annotation");
+		}
+		
+		if(!$resolvedTransformation instanceof \Rezonant\MapperBundle\Transformation\TransformationInterface){
+			throw new TransformationException("Tranformations must be a instance of \Rezonant\MapperBundle\Transformation\TransformationInterface");
+		}
+		
+		$transformationAnnotation->applyAnnotation($transformationAnnotation, $resolvedTransformation);
+		
+		return $resolvedTransformation;
 	}
 	
 	private function isStandard($object)

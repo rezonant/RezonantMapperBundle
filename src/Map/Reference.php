@@ -3,6 +3,7 @@
 namespace Rezonant\MapperBundle\Map;
 use Rezonant\MapperBundle\Utilities\PathParser;
 use Rezonant\MapperBundle\Utilities\Reflector;
+use Rezonant\MapperBundle\Exceptions\UnableToMapException;
 
 class Reference {
 	public function __construct($ref, $class = null) {
@@ -14,18 +15,18 @@ class Reference {
 		$this->fields = $pathParser->parse($ref);
 		
 		if ($class) {
-			$this->properties = $this->getDeepProperty($class, $ref);
+			$this->reflectionFields = $this->getDeepProperty($class, $ref);
 			$this->types = array_map(
-				function($prop) use ($reflector) { 
-					return $reflector->getTypeFromProperty($prop);
-				}, $this->properties);
+				function($field) use ($reflector) { 
+					return $reflector->getType($field);
+				}, $this->reflectionFields);
 		}
 	}
 	
 	private $rootClass;
 	private $string;
 	private $fields;
-	private $properties;
+	private $reflectionFields;
 	private $types;
 	
 	function getRootClass() {
@@ -40,8 +41,8 @@ class Reference {
 		return $this->fields;
 	}
 
-	function getProperties() {
-		return $this->properties;
+	function getReflectionFields() {
+		return $this->reflectionFields;
 	}
 
 	function getTypes() {
@@ -64,14 +65,14 @@ class Reference {
 		$originalClass = $class;
 		$fields = $pathParser->parse($dottedReference);
 		$fieldCount = count($fields);
-		$property = null;
+		$reflectionField = null;
 		$className = $originalClass->getName();
-		$properties = array();
+		$reflectionFields = array();
 		
 		foreach ($fields as $i => $field) {
 		
 			if ($className == '<array>') {
-				$properties[] = '<array>';
+				$reflectionFields[] = '<array>';
 				continue;
 			}
 			
@@ -87,21 +88,35 @@ class Reference {
 			}
 			
 			$currentClass = new \ReflectionClass($className);
-			$property = $currentClass->getProperty($field->field);
-			$properties[] = $property;
+			
+			$fieldName = $field->field;
+			$methodName = "get$fieldName";
+			
+			if($currentClass->hasMethod($methodName)){ //Method
+				$reflectionField = $currentClass->getMethod($methodName);
+				
+			} else if($currentClass->hasProperty($fieldName)){ //Property
+				$reflectionField = $currentClass->getProperty($fieldName);
+			} else{
+				throw new \Exception("Could get property \"{$fieldName}\" in the class \"{$className}\" it either does not exist or does not have a getter.");
+			}
+			
+			$reflectionFields[] = $reflectionField;
 			
 			// We're done? We'll return $property at the end.
-			
 			if ($i + 1 >= $fieldCount)
 				break;
 			
-			$className = $reflector->getTypeFromProperty($property);
+			
+			$className = $reflector->getType($reflectionField);
+
+			
 			if (!$className)
 				throw new \InvalidArgumentException(
 					"Failed to reflect on field reference '$dottedReference' of class {$originalClass->getName()}");
 			
 		}
 		
-		return $properties;
+		return $reflectionFields;
 	}
 }
