@@ -17,6 +17,12 @@ class Map {
 			$newField->setSource($field->getDestination());
 			$newField->setDestination($field->getSource());
 			
+			//get the forward transformation and flip its direction
+			if($field->getTransformation()){
+				$invertTransformation = $field->getTransformation()->invert();
+				$newField->setTransformation($invertTransformation);
+			}
+			
 			if ($field->getSubmap()) {
 				$newField->setMap($field->getSubmap()->invert());
 			}

@@ -16,7 +16,7 @@ services:
         
     rezonant.mapper.annotation_map_provider:
         class: Rezonant\MapperBundle\Providers\AnnotationMapProvider
-        arguments: ['@annotation_reader']
+        arguments: ['@annotation_reader', '@service_container']
         
     rezonant.mapper.config_map_provider.maps:
         synthetic: true
@@ -24,3 +24,7 @@ services:
     rezonant.mapper.config_map_provider:
         class: Rezonant\MapperBundle\Providers\ConfigMapProvider
         arguments: ['%rezonant.mapper.providers.config.maps%']
+        
+    rezonant.mapper.doctrine_entity_transformation:
+        class: Rezonant\MapperBundle\Transformation\DoctrineEntityTransformation
+        arguments: ['@doctrine']

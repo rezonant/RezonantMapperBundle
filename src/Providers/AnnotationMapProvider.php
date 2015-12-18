@@ -6,15 +6,23 @@ use Rezonant\MapperBundle\Utilities\PathParser;
 use Rezonant\MapperBundle\MapBuilder;
 use Rezonant\MapperBundle\Map\Reference;
 use Rezonant\MapperBundle\Utilities\Reflector;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class AnnotationMapProvider extends MapProvider {
 	
-	public function __construct(Reader $reader) {
+	public function __construct(Reader $reader, ContainerInterface $container) {
 		$this->annotationReader = $reader;
 		$this->pathParser = new PathParser();
 		$this->reflector = new Reflector();
+		$this->container = $container;
 	}
 
+	/**
+	 *
+	 * @var ContainerInterface 
+	 */
+	private $container;
+	
 	/**
 	 * @var Reflector
 	 */
@@ -53,11 +61,14 @@ class AnnotationMapProvider extends MapProvider {
 	public function mapFromModel($modelOrClass, $entityOrClass) {
 		$class = new \ReflectionClass($modelOrClass);
 		$annotationName = 'Rezonant\\MapperBundle\\Annotations\\MapTo';
+		$doctrineEntityAnnotationName = 'Rezonant\\MapperBundle\\Annotations\\DoctrineEntity';
 		$map = new MapBuilder();
 		$destinationClass = new \ReflectionClass($entityOrClass);
 		
 		foreach ($class->getProperties() as $property) {
 			$annotation = $this->annotationReader->getPropertyAnnotation($property, $annotationName);
+			
+			$doctrineEntityAnnotation = $this->annotationReader->getPropertyAnnotation($property, $doctrineEntityAnnotationName);
 			
 			// Resolve the type of this property for submapping later.
 			
@@ -75,6 +86,15 @@ class AnnotationMapProvider extends MapProvider {
 			else if ($destinationClass->hasProperty($property->name))
 				$destinationField = $property->name;
 			
+			//figure out if there is a transformation
+			$transformation = null;
+			if($doctrineEntityAnnotation){
+				//get the doctrine entity tranformation rezonant.mapper.doctrine_entity_transformation
+				$transformation = $this->container->get('rezonant.mapper.doctrine_entity_transformation');
+				$transformation->setEntityClass($doctrineEntityAnnotation->value);
+				$transformation->setId($doctrineEntityAnnotation->id);
+			}
+			
 			// Resolve the destination field's type for generating a submap.
 			
 			if ($destinationField) {
@@ -88,7 +108,8 @@ class AnnotationMapProvider extends MapProvider {
 				$map->field(
 					new Reference($property->name, $class), 
 					$destReference, 
-					$submap);
+					$submap,
+					$transformation);
 			}
 		}
 		
