@@ -5,6 +5,7 @@ use Doctrine\Common\Annotations\AnnotationReader;
 use Rezonant\MapperBundle\Utilities\PathParser;
 use Rezonant\MapperBundle\MapBuilder;
 use Rezonant\MapperBundle\Utilities\Reflector;
+use Rezonant\MapperBundle\Exceptions\TransformationException;
 
 class ConfigMapProvider extends MapProvider {
 	
@@ -51,11 +52,43 @@ class ConfigMapProvider extends MapProvider {
 			else if (isset($field['type']))
 				$types = array($field['type']);
 
-			$builder->field($field['from'], $field['to'], $types, $map);
+			$transformation = null;
+			if(isset($field['transformation'])){
+				$transformation = $this->getTransformationFromConfig($field['transformation']);
+			}
+			
+			$builder->field($field['from'], $field['to'], $types, $map, $transformation);
 		}
 		
 		return $builder->build();
 	}
+	
+	private function getTransformationFromConfig($transformation){
+		if(!$transformation){
+			return null;
+		}
+		
+		$resolvedTransformation = null;
+		
+		if(class_exists($transformation)){
+			$resolvedTransformation = new $transformation();
+		}
+		
+		if(is_string($transformation) && $this->container->has($transformation)){
+			$resolvedTransformation = $this->container->get($transformation);
+		}
+		
+		if(!$resolvedTransformation){
+			throw new TransformationException("Could not resolve tranformation from the transformation field configuration");
+		}
+		
+		if(!$resolvedTransformation instanceof \Rezonant\MapperBundle\Transformation\TransformationInterface){
+			throw new TransformationException("Tranformations must be a instance of \Rezonant\MapperBundle\Transformation\TransformationInterface");
+		}
+		
+		return $resolvedTransformation;
+	}
+	
 	
 	function getMaps() {
 		return $this->maps;
