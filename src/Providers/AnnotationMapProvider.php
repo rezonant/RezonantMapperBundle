@@ -63,12 +63,14 @@ class AnnotationMapProvider extends MapProvider {
 		$class = new \ReflectionClass($modelOrClass);
 		$annotationName = 'Rezonant\\MapperBundle\\Annotations\\MapTo';
 		$transformationAnnotationName = 'Rezonant\\MapperBundle\\Annotations\\Transformation';
+		$excludeAnnotationName = 'Rezonant\\MapperBundle\\Annotations\\Exclude';
 		$map = new MapBuilder();
 		$destinationClass = new \ReflectionClass($entityOrClass);
 		
 		foreach ($class->getProperties() as $property) {
 			$annotation = $this->annotationReader->getPropertyAnnotation($property, $annotationName);
 			$transformationAnnotation = $this->annotationReader->getPropertyAnnotation($property, $transformationAnnotationName);
+			$excludeAnnotation = $this->annotationReader->getPropertyAnnotation($property, $excludeAnnotationName);
 			
 			
 			// Resolve the type of this property for submapping later.
@@ -78,6 +80,7 @@ class AnnotationMapProvider extends MapProvider {
 			$fieldValue = null;
 			$submap = null;
 			$destinationField = null;
+			$exclude = false;
 			
 			// Use the annoted destination field, or assume that the mapping
 			// is 1-to-1.
@@ -89,6 +92,10 @@ class AnnotationMapProvider extends MapProvider {
 			
 			//Get transformation if there is one
 			$transformation = $this->getTransformationFromAnnotation($transformationAnnotation);
+			
+			if($excludeAnnotation){
+				$exclude = true;
+			}
 			
 			// Resolve the destination field's type for generating a submap.
 			
@@ -104,7 +111,8 @@ class AnnotationMapProvider extends MapProvider {
 					new Reference($property->name, $class), 
 					$destReference, 
 					$submap,
-					$transformation);
+					$transformation,
+					$exclude);
 			}
 		}
 		

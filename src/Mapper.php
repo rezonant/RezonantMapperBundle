@@ -84,6 +84,10 @@ class Mapper {
 		}
 		
 		foreach ($map->getFields() as $field) {
+			if($field->getExclude()){
+				continue;
+			}
+			
 			$name = $field->getSource()->toString();
 			$destinationField = $field->getDestination()->getFields();
 			$value = $this->get($source, $name);
