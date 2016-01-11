@@ -27,6 +27,8 @@ class Map {
 				$newField->setMap($field->getSubmap()->invert());
 			}
 			
+			$newField->setExclude($field->getExclude());
+			
 			$map->fields[] = $newField;
 		}
 		

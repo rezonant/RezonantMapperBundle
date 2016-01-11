@@ -28,6 +28,12 @@ class MapField {
 	 */
 	private $transformation;
 	
+	/**
+	 *
+	 * @var boolean
+	 */
+	private $exclude;
+	
 	function getSource() {
 		return $this->source;
 	}
@@ -42,6 +48,10 @@ class MapField {
 	
 	function getTransformation() {
 		return $this->transformation;
+	}
+	
+	function getExclude(){
+		return $this->exclude;
 	}
 
 	function setSource($source) {
@@ -65,5 +75,9 @@ class MapField {
 			$transformation = clone $transformation;
 		}
 		$this->transformation = $transformation;
+	}
+	
+	function setExclude($exclude){
+		$this->exclude = $exclude;
 	}
 }

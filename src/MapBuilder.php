@@ -15,13 +15,14 @@ class MapBuilder {
 	 * @param Map $map
 	 * @return MapBuilder
 	 */
-	public function field(Reference $source, Reference $dest, Map $map = NULL, TransformationInterface $transformation = NULL)
+	public function field(Reference $source, Reference $dest, Map $map = NULL, TransformationInterface $transformation = NULL, $exclude = false)
 	{
 		$mapField = new MapField();
 		$mapField->setSource($source);
 		$mapField->setDestination($dest);
 		$mapField->setSubmap($map);
 		$mapField->setTransformation($transformation);
+		$mapField->setExclude($exclude);
 		$this->fields[] = $mapField;
 		
 		return $this;
